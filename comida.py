@@ -155,18 +155,20 @@ def find_guid_in_address_space(start_address, end_address):
     result = []
     for head in idautils.Heads(start_address, end_address):
         # search for direct value operand
-        operand_value = idc.get_operand_value(head, 1)
-        guid_bytes = idc.get_bytes(operand_value, 16)
-        guid = guid_bytes_to_string(guid_bytes)
-        try:
-            result.append(build_com_from_class_definition(head, guid))
-        except WindowsError as e:
-            pass
-            
-        try:
-            result.append(build_com_from_interface_definition(head, guid))
-        except WindowsError as e:
-            pass
+        for operand_value in [idc.get_operand_value(head, 1), idc.get_operand_value(head, 0)]:
+            guid_bytes = idc.get_bytes(operand_value, 16)
+            guid = guid_bytes_to_string(guid_bytes)
+            try:
+                result.append(build_com_from_class_definition(head, guid))
+                break
+            except WindowsError as e:
+                pass
+                
+            try:
+                result.append(build_com_from_interface_definition(head, guid))
+                break
+            except WindowsError as e:
+                pass
             
     return result
 
@@ -219,10 +221,12 @@ def infer_function_signature(cfunc, expr, index_interface, index_output):
     :ivar int index_interface: index of the GUID parameter into function signature
     :ivar int index_output: index of the output variable that will be infer
     """
-    variable = expr.a[index_output].v
-    # check if variable is a ref to a variable
-    if expr.a[index_output].op == idaapi.cot_ref:
-        variable = expr.a[index_output].x.v
+    
+    curent_expr = expr.a[index_output]
+    while curent_expr.op in [idaapi.cot_cast, idaapi.cot_ref]:
+        curent_expr = curent_expr.x
+        
+    variable = curent_expr.v
 
     if variable is None:
         ComIDA.log("Variable name not found")
@@ -230,7 +234,10 @@ def infer_function_signature(cfunc, expr, index_interface, index_output):
     
     ComIDA.log("infer type of variable: (%s)"%cfunc.lvars[variable.idx].name)
     # try to find type name from third parameter
-    guid_bytes = idc.get_bytes(idc.get_operand_value(expr.a[index_interface].ea, 1), 16)
+    value = idc.get_operand_value(expr.a[index_interface].ea, 1)
+    if value == -1:
+        value = idc.get_operand_value(expr.a[index_interface].ea, 0) # 32 bits case
+    guid_bytes = idc.get_bytes(value, 16)
     guid = guid_bytes_to_string(guid_bytes)
     
     interface = None
@@ -344,7 +351,7 @@ class CoMethodTypeInference(idaapi.ctree_visitor_t):
         
         if member.name != self.method_name:
             return 0
-        
+
         self.need_update = infer_function_signature(self.cfunc, i, self.index_interface, self.index_output)
         return 0 
     
