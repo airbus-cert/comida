@@ -157,6 +157,8 @@ def find_guid_in_address_space(start_address, end_address):
         # search for direct value operand
         for operand_value in [idc.get_operand_value(head, 1), idc.get_operand_value(head, 0)]:
             guid_bytes = idc.get_bytes(operand_value, 16)
+            if guid_bytes is None:
+                continue
             guid = guid_bytes_to_string(guid_bytes)
             try:
                 result.append(build_com_from_class_definition(head, guid))
