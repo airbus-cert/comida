@@ -240,6 +240,9 @@ def infer_function_signature(cfunc, expr, index_interface, index_output):
     if value == -1:
         value = idc.get_operand_value(expr.a[index_interface].ea, 0) # 32 bits case
     guid_bytes = idc.get_bytes(value, 16)
+    if guid_bytes is None or len(guid_bytes) != 16:
+        ComIDA.log("GUID bytes unavailable for type inference")
+        return False
     guid = guid_bytes_to_string(guid_bytes)
     
     interface = None
